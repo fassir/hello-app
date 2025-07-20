@@ -53,7 +53,7 @@ on:
     branches:
       - main
 env:
-  DOCKER_IMAGE_NAME: seu-usuario-docker/hello-app
+  DOCKER_IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/hello-app
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:

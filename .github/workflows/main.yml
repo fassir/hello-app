@@ -4,7 +4,7 @@ on:
     branches:
       - main 
 env:
-  DOCKER_IMAGE_NAME: seu-usuario-docker/hello-app
+  DOCKER_IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/hello-app
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
@@ -28,8 +28,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: . 
-          push: true 
-          tags: ${{ env.DOCKER_IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          push: true
           tags: |
             ${{ env.DOCKER_IMAGE_NAME }}:${{ env.IMAGE_TAG }}
             ${{ env.DOCKER_IMAGE_NAME }}:latest
