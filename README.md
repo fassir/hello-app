@@ -95,9 +95,13 @@ Estas são as variáveis necessarias para criação do workflow dentro do github
     * Vá para o seu repositório `hello-app` no GitHub.
     * Clique em `Settings` (Configurações).
     * No menu lateral esquerdo, clique em `Secrets and variables` > `Actions`.
+    ![image](images/image.png)
     * Clique em `New repository secret`.
+    ![image](images/image-1.png)
     * Crie um segredo com o nome `DOCKER_USERNAME` e o valor do seu nome de usuário do Docker Hub.
+    ![image](images/image-2.png)
     * Crie outro segredo com o nome `DOCKER_PASSWORD` e o valor da sua senha do Docker Hub.
+    ![image](images/image-2.png)
 
 2.  **SSH_PRIVATE_KEY**:
     * **Gerar um par de chaves SSH:** Abra seu terminal e execute:
@@ -105,18 +109,12 @@ Estas são as variáveis necessarias para criação do workflow dentro do github
         ssh-keygen -t rsa -b 4096 -C "github-actions-key" -f ~/.ssh/github_actions_rsa
         ```
         Quando perguntado por uma passphrase, apenas pressione Enter duas vezes
-    * **Adicionar a chave pública ao seu repositório `hello-manifests`:**
-        * Vá para o repositório `hello-manifests` no GitHub.
-        * Clique em `Settings` (Configurações).
-        * No menu lateral esquerdo, clique em `Deploy keys`.
-        * Clique em `Add deploy key`.
-        * Dê um título (ex: `github-actions-hello-app`).
-        * Cole o **conteúdo completo** do arquivo `~/.ssh/github_actions_rsa.pub` (começa com `ssh-rsa ...`).
-        * **Marque a opção "Allow write access"** (Permitir acesso de escrita). Isso é crucial para que o GitHub Actions possa fazer o Pull Request.
-        * Clique em `Add key`.
-    * **Adicionar a chave privada como um segredo no repositório `hello-app`:**
+    * **Adicionar a chave privada como um segredo no repositório:**
         * Volte para o repositório `hello-app` no GitHub.
         * Vá para `Settings` > `Secrets and variables` > `Actions`.
+        ![image](images/image.png)
         * Clique em `New repository secret`.
+        ![image](images/image-1.png)
         * Crie um segredo com o nome `SSH_PRIVATE_KEY`.
+        ![image](images/image-2.png)
         * Cole o **conteúdo completo** do arquivo `~/.ssh/github_actions_rsa` (começa com `-----BEGIN OPENSSH PRIVATE KEY-----` e termina com `-----END OPENSSH PRIVATE KEY-----`). Certifique-se de copiar tudo, incluindo as linhas de `BEGIN` e `END`.
