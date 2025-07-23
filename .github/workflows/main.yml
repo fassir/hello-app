@@ -9,9 +9,8 @@ on:
 env:
   DOCKER_IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/hello-app
   IMAGE_TAG: ${{ github.sha }}
+  MANIFESTS_REPO: seu-usuario-github/hello-manifests
   MANIFESTS_PATH: k8s
-  MANIFESTS_REPO_OWNER: fassir
-  MANIFESTS_REPO_NAME: hello-manifests
 
 jobs:
   build-and-push:
@@ -28,7 +27,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }} 
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -52,7 +51,7 @@ jobs:
           sed -i "s|image: .*|image: ${{ env.DOCKER_IMAGE_NAME }}:${{ env.IMAGE_TAG }}|" deployment.yaml
 
       - name: Create Pull Request for manifest changes
-        uses: /create-pull-request@v5
+        uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "chore(app): Update hello-app image to ${{ env.IMAGE_TAG }}"
