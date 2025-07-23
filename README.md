@@ -3,25 +3,25 @@
 Este projeto visa demonstrar a implementação de uma pipeline de CI/CD utilizando FastAPI, Docker, GitHub Actions e ArgoCD. A seguir, você encontrará um guia passo a passo para configurar e executar essa pipeline.
 # 2. Metodologia
 Para implementar a pipeline de CI/CD, seguiremos os seguintes passos:
-1. [Criando a aplicação FastAPI](#1-criando-a-aplicacao-fastapi)
+1. [Criando a aplicação FastAPI](#1-criando-a-aplicação-fastapi)
 
-    1.1 [Arquivos necessários](#1.1-arquivos-necessarios)
+    1.1 [Arquivos necessários](#11-arquivos-necessários)
 
-    1.2 [Variáveis de ambiente](#1.2-variaveis-de-ambiente)
+    1.2 [Variáveis de ambiente](#12-variáveis-de-ambiente)
 
-    1.3 [Executando ações diretório do projeto](#1.3-executando-acoes-diretorio-do-projeto)
+    1.3 [Executando ações diretório do projeto](#13-executando-ações-diretório-do-projeto)
 
-2. [Repositório Git com os manifests do ArgoCD](#2-repositorio-git-com-os-manifests-do-argocd)
+2. [Repositório Git com os manifests do ArgoCD](#2-repositório-git-com-os-manifests-do-argocd)
 
     2.1 [Criar os manifestos do Kubernetes de deployment e service para o Hello App no repositório de manifestos](#21-criar-os-manifestos-do-kubernetes-de-deployment-e-service-para-o-hello-app-no-repositório-de-manifestos)
 
     2.2 [Criar o App no ArgoCD](#22-criar-o-app-no-argocd)
 
-    2.3 [Na interface do ArgoCD criar o vínculo com o repositório de manifestos](#23-na-interface-do-argocd-criar-o-vinculo-com-o-repositorio-de-manifestos)
+    2.3 [Na interface do ArgoCD criar o vínculo com o repositório de manifestos](#23-na-interface-do-argocd-criar-o-vínculo-com-o-repositorio-de-manifestos)
 
     2.4 [Criar o app no ArgoCD](#24-criar-o-app-no-argocd)
 
-3. [Acessar e testar a aplicação localmente](#3-acessar-e-testar-a-aplicacao-localmente)
+3. [Acessar e testar a aplicação localmente](#3-acessar-e-testar-a-aplicação-localmente)
 
     3.1 [Criando o port-forward](#31-criando-o-port-forward)
 
@@ -31,7 +31,7 @@ Para implementar a pipeline de CI/CD, seguiremos os seguintes passos:
 
     3.4 [Monitore o ArgoCD](#34-monitore-o-argocd)
 
-    3.5 [Verifique a aplicação atualizada](#35-verifique-a-aplicacao-atualizada)
+    3.5 [Verifique a aplicação atualizada](#35-verifique-a-aplicação-atualizada)
 
 Uma vez apresentado os passos seguiremos com a implementação.
 # 1.  Criando a aplicação FastAPI
@@ -82,63 +82,121 @@ uvicorn
 ```
 - .github\workflows\main.yaml
 ```yaml
-name: CI/CD Pipeline - Build, Push & Update ArgoCD Manifests
+name: CI/CD Pipeline - Build, Push & Update ArgoCD Manifests (Two Repositories)
+
 on:
   push:
     branches:
       - main
+
 env:
-  DOCKER_IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/hello-app
+  DOCKER_USERNAME_SECRET: ${{ secrets.DOCKER_USERNAME_VALUE }}
+  DOCKER_IMAGE_REPO_SECRET: ${{ secrets.DOCKER_IMAGE_REPO_NAME }}
+
+  GITHUB_OWNER_SECRET: ${{ secrets.GITHUB_OWNER_USERNAME }}
+  MANIFESTS_REPO_NAME_SECRET: ${{ secrets.GITHUB_MANIFESTS_REPO_NAME }}
+
   IMAGE_TAG: ${{ github.sha }}
+  
+  MANIFESTS_PATH_IN_REPO: hello-app
+  LOCAL_MANIFESTS_CLONE_PATH: manifests-repo-clone 
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest 
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write      
+      pull-requests: write 
 
     steps:
-      - name: Checkout application code
-        uses: actions/checkout@v4 
+    - name: Checkout application code (hello-app)
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3 
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3 
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }} 
-          password: ${{ secrets.DOCKER_PASSWORD }} 
+    - name: Build and push Docker image
+      id: docker_build
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          ${{ env.DOCKER_USERNAME_SECRET }}/${{ env.DOCKER_IMAGE_REPO_SECRET }}:${{ env.IMAGE_TAG }}
+          ${{ env.DOCKER_USERNAME_SECRET }}/${{ env.DOCKER_IMAGE_REPO_SECRET }}:latest
+        outputs: |
+          type=image,value=${{ env.DOCKER_USERNAME_SECRET }}/${{ env.DOCKER_IMAGE_REPO_SECRET }}:${{ env.IMAGE_TAG }}
+          type=image,value=${{ env.DOCKER_USERNAME_SECRET }}/${{ env.DOCKER_IMAGE_REPO_SECRET }}:latest
+          type=image,value=${{ steps.docker_build.outputs.digest }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5 
-        with:
-          context: . 
-          push: true 
-          tags: |
-            ${{ env.DOCKER_IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-            ${{ env.DOCKER_IMAGE_NAME }}:latest
+    - name: Checkout manifests repository (hello-manifests)
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ env.GITHUB_OWNER_SECRET }}/${{ env.MANIFESTS_REPO_NAME_SECRET }}
+        path: ${{ env.LOCAL_MANIFESTS_CLONE_PATH }} 
+        ssh-key: ${{ secrets.SSH_PRIVATE_KEY }} 
 
-      - name: Checkout ArgoCD manifests repository
-        uses: actions/checkout@v4
-        with:
-          repository: seu-usuario-github/hello-manifests
-          path: hello-manifests
-          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+    - name: Update image tag in deployment.yaml
+      id: update_manifest
+      run: |
+        cd ${{ env.LOCAL_MANIFESTS_CLONE_PATH }}/${{ env.MANIFESTS_PATH_IN_REPO }}
+        
+        sed -i "s|image: ${{ env.DOCKER_USERNAME_SECRET }}/${{ env.DOCKER_IMAGE_REPO_SECRET }}:.*|image: ${{ env.DOCKER_USERNAME_SECRET }}/${{ env.DOCKER_IMAGE_REPO_SECRET }}:${{ env.IMAGE_TAG }}|g" deployment.yaml
+        
+        echo "Conteúdo de deployment.yaml atualizado:"
+        cat deployment.yaml 
+        
+        if ! git diff --quiet --exit-code deployment.yaml; then
+          echo "changes_detected=true" >> $GITHUB_OUTPUT
+          echo "Changes detected in deployment.yaml. Ready to create Pull Request."
+        else
+          echo "changes_detected=false" >> $GITHUB_OUTPUT
+          echo "No changes detected in deployment.yaml. Skipping Pull Request."
+        fi
+      working-directory: ${{ github.workspace }} 
+
+    - name: Create Pull Request
+      if: steps.update_manifest.outputs.changes_detected == 'true'
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GH_PAT_FOR_MANIFESTS }} 
+        
+        commit-message: "feat(app): Update hello-app image to ${{ env.IMAGE_TAG }}"
+        title: "Atualização da Imagem hello-app para novo SHA"
+        body: |
+          Este Pull Request atualiza a tag da imagem `hello-app` para o novo SHA: `${{ env.IMAGE_TAG }}` no `deployment.yaml`.
+          Disparado por push no repositório da aplicação.
+        branch: "update-image-tag-${{ github.sha }}"
+        base: "main"
+        delete-branch: true
+        repository: ${{ env.GITHUB_OWNER_SECRET }}/${{ env.MANIFESTS_REPO_NAME_SECRET }} 
+        path: ${{ env.LOCAL_MANIFESTS_CLONE_PATH }}
 ```
 Estas são as variáveis necessarias para criação do workflow dentro do github:
 
   ## 1.2  Variáveis de ambiente
-- **DOCKER_USERNAME** e **DOCKER_PASSWORD**:
+- **DOCKER_USERNAME_VALUE**, **DOCKER_PASSWORD**, **DOCKER_IMAGE_REPO_NAME** e **GITHUB_MANIFESTS_REPO_NAME**:
+
     * Vá para o seu repositório `hello-app` no GitHub.
     * Clique em `Settings` (Configurações).
     * No menu lateral esquerdo, clique em `Secrets and variables` > `Actions`.
     ![image](images/image.png)
     * Clique em `New repository secret`.
     ![image](images/image-1.png)
-    * Crie um segredo com o nome `DOCKER_USERNAME` e o valor do seu nome de usuário do Docker Hub.
+    * Crie um segredo com o nome `DOCKER_USERNAME_VALUE` e Valor: seu nome de usuário real do Docker Hub.
     ![image](images/image-2.png)
-    * Crie outro segredo com o nome `DOCKER_PASSWORD` e o valor da sua senha do Docker Hub.
+    * Crie outro segredo com o nome `DOCKER_IMAGE_REPO_NAME` e o nome do seu repositório da imagem Docker.
     ![image](images/image-2.png)
-
+    * Crie outro segredo com o nome `GITHUB_OWNER_USERNAME` e o nome de usuário/organização real do GitHub que é dono dos repositórios.
+    ![image](images/image-2.png)
+    * Crie outro segredo com o nome `GITHUB_MANIFESTS_REPO_NAME` e o nome de usuário/organização real do GitHub que é dono dos repositórios.
+    ![image](images/image-2.png)
+    
 -  **SSH_PRIVATE_KEY**:
     * **Gerar um par de chaves SSH:** 
     * Abra seu terminal e *execute:
@@ -147,7 +205,7 @@ Estas são as variáveis necessarias para criação do workflow dentro do github
         ```
         Quando perguntado por uma passphrase, apenas pressione Enter duas vezes
     * **Adicionar a chave privada como um segredo no repositório:**
-        * Volte para o repositório `hello-app` no GitHub.
+        * Volte para o repositório **hello-app** no GitHub.
         * Vá para `Settings` > `Secrets and variables` > `Actions`.
         ![image](images/image.png)
         * Clique em `New repository secret`.
@@ -158,7 +216,7 @@ Estas são as variáveis necessarias para criação do workflow dentro do github
 
     * **Chave pública para repositório hello-app**
         
-      * Adicionar a chave pública ao repositório hello-manifests:
+      * Adicionar a chave pública ao repositório **hello-manifests**:
         
       * Vá para hello-manifests > Settings > Deploy keys.
         
@@ -172,7 +230,16 @@ Estas são as variáveis necessarias para criação do workflow dentro do github
         **Key**: Cole o conteúdo do arquivo público: cat ~/.ssh/github_actions_manifests_rsa_key.pub
         
       * Marque a opção "Allow write access". Isso é crucial para que o GitHub Actions possa fazer commits/PRs nesse repositório.
-
+  * **Public Access Token**
+      * Caso a aplicação esteja com erros de receber a solicitação, essa chave permitirá que a aplicação tenha acesso, mesmo que o repositório seja privado. Para criá-lo vá nas configurações da conta do github
+      ![alt text](images/image-13.png)
+      * Após entrar neste menu, vá em Personal access tokens > Tokens (classic)
+      * selecione Generate new token > Generate new tokens (classic)
+       ![alt text](images/image-14.png)
+      * Defina o tempo e o nome que o token terá para lembrar de seu uso. Selecione as permissões para o repositório (só é necessario repo:status e repo_deployments mas como a chave não será passada para terceiros marcar a opção repo não terá grande vazamento de prioridades)
+      ![alt text](images/image-15.png)
+      * Ao final da página terá o botão "Generate token" que irá gerá-lo. Lembre-se de armazená-lo em lugar seguro pois não é possível revê-lo novamente.
+      * Uma vez em posse dele, ele será usado como senha para seu repositório hello-manifests no argo (passo [23](#23-na-interface-do-argocd-criar-o-vinculo-com-o-repositorio-de-manifestos))
 ## 1.3 Executando ações diretório do projeto
 - Para criar o repositório, usamos os seguintes comando:
 ```bash
@@ -198,8 +265,6 @@ git push origin main
 
 - Este repositório pode ser privado ou público. Para maior segurança e para demonstrar a configuração de chaves SSH no GitHub Actions, é comum que este repositório seja privado. Se você optar por torná-lo público, o processo de configuração da chave SSH ainda é válido e robusto para o acesso de escrita.
 
-- Você não precisa adicionar nenhum arquivo a ele agora; faremos isso na Etapa 3. Apenas crie o repositório.
-
 ## 1.5 Commitar e Enviar os Arquivos Iniciais
 - No seu terminal (Git Bash, PowerShell ou CMD) dentro do diretório hello-app:
 
@@ -209,36 +274,7 @@ git commit -m "Initial commit: Add FastAPI app, Dockerfile, and requirements"
 git push origin main
 ```
 
-- Para que o GitHub Actions possa fazer login no Docker Hub e fazer um Pull Request no repositório de manifestos, você precisará configurar alguns segredos no seu repositório `hello-app`.
-
-2.  **SSH_PRIVATE_KEY**:
-    * **Gerar um par de chaves SSH:** Abra seu terminal e execute:
-        ```bash
-        ssh-keygen -t rsa -b 4096 -C "github-actions-key" -f ~/.ssh/github_actions_rsa
-        ```
-        Quando perguntado por uma passphrase, **deixe em branco** (apenas pressione Enter duas vezes), pois o GitHub Actions não pode lidar com chaves protegidas por passphrase.
-    * Isso criará dois arquivos: `github_actions_rsa` (sua chave privada) e `github_actions_rsa.pub` (sua chave pública).
-    * **Adicionar a chave pública ao seu repositório `hello-manifests`:**
-        * Vá para o repositório `hello-manifests` no GitHub.
-        * Clique em `Settings` (Configurações).
-        * No menu lateral esquerdo, clique em `Deploy keys`.
-        * Clique em `Add deploy key`.
-        * Dê um título (ex: `github-actions-hello-app`).
-        * Cole o **conteúdo completo** do arquivo `~/.ssh/github_actions_rsa.pub` (começa com `ssh-rsa ...`).
-        * **Marque a opção "Allow write access"** (Permitir acesso de escrita). Isso é crucial para que o GitHub Actions possa fazer o Pull Request.
-        * Clique em `Add key`.
-    * **Adicionar a chave privada como um segredo no repositório `hello-app`:**
-        * Volte para o repositório `hello-app` no GitHub.
-        * Vá para `Settings` > `Secrets and variables` > `Actions`.
-        ![alt text](images/image.png)
-        * Clique em `New repository secret`.
-        ![alt text](images/image-1.png)
-        * Crie um segredo com o nome `SSH_PRIVATE_KEY`.
-        ![alt text](images/image-2.png)
-        * Cole o **conteúdo completo** do arquivo `~/.ssh/github_actions_rsa` (começa com `-----BEGIN OPENSSH PRIVATE KEY-----` e termina com `-----END OPENSSH PRIVATE KEY-----`). Certifique-se de copiar tudo, incluindo as linhas de `BEGIN` e `END`.
-
-3.  **Ter acesso de gravação ao repositório de manifests usado pelo ArgoCD:**
-    * Isso foi configurado no passo anterior ao adicionar a chave de deploy com permissão de escrita no repositório `hello-manifests`.
+- Para que o GitHub Actions possa fazer login no Docker Hub e fazer um Pull Request no repositório de manifestos, você precisará configurar alguns [segredos](#12-variáveis-de-ambiente) no seu repositório `hello-app`.
 
 - Com esses segredos configurados e o arquivo de workflow no lugar, seu pipeline de CI/CD está pronto para ser acionado em cada push para a branch `main` do seu repositório `hello-app`.
 
@@ -248,7 +284,7 @@ git push origin main
 ## 2.1 Criar os manifestos do Kubernetes de deployment e service para o Hello App no repositório de manifestos
 - Clone o repositório hello-manifests para sua máquina local:
 ```bash
-git clone git@github.com:seu-usuario-github/hello-manifests.git # Use SSH para clonar
+git clone git@github.com:seu-usuario-github/hello-manifests.git 
 cd hello-manifests
 ```
 
@@ -279,9 +315,9 @@ spec:
     spec:
       containers:
       - name: hello-app
-        # A imagem será atualizada automaticamente pelo GitHub Actions
+        
         # A tag ':latest' é um fallback, mas o CI/CD usará o SHA do commit
-        image: seu-usuario-docker/hello-app:latest # Substitua pelo seu Docker Hub username
+        image: seu-usuario-docker/hello-app:latest 
         ports:
         - containerPort: 8000 # Porta que sua aplicação FastAPI expõe
 ```
@@ -300,9 +336,9 @@ spec:
     app: hello-app
   ports:
     - protocol: TCP
-      port: 80 # Porta que o serviço Kubernetes expõe
-      targetPort: 8000 # Porta do contêiner onde a aplicação está rodando
-  type: LoadBalancer # Ou NodePort, ClusterIP, dependendo do seu ambiente Kubernetes
+      port: 80 
+      targetPort: 8000 # ou outra porta que não esteja em uso. Não use as mesmas portas que outras aplicações estejam usando para não entrarem em conflito 
+  type: LoadBalancer
 ```
 - Adicione e commite esses manifestos ao seu repositório hello-manifests:
 
@@ -340,7 +376,7 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443
 ```
 
 - Abrir seu navegador e vá para https://localhost:8080. Você pode receber um aviso de certificado inválido, pois é um certificado autoassinado. Você pode prosseguir com segurança.
-![alt text](image.png)
+![alt text](images/image-19.png)
 - Fazer Login no ArgoCD CLI. A primeira vez que você acessa a interface web, ou se quiser usar a CLI do ArgoCD, precisará de uma senha. A senha inicial para o usuário admin é o nome do pod argocd-server.
 
 - Obtenha o nome do pod argocd-server:
@@ -348,13 +384,15 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443
 ```bash
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
 ```
-- Copie a saída deste comando (será algo como argocd-server-xxxxxxxxxx-yyyyy). Esta é a sua senha inicial.
+**Para o Windows, use o git bash para executar esse comando**
+
+- Copie a saída deste comando. Esta é a sua senha inicial.
 
 * Username: admin
 
 * Password: Cole o nome do pod argocd-server que você obteve no passo anterior.
 
-- A criação do aplicativo no ArgoCD pode ser feita via interface web (UI) ou via argocd CLI. Vamos descrever os passos para a UI, que é mais visual.
+- A criação do aplicativo no ArgoCD pode ser feita via interface web (UI) ou via argocd CLI.
 
 ## 2.3 Na interface do ArgoCD criar o vínculo com o repositório de manifestos
 - Acesse a UI do ArgoCD: Abra seu navegador e navegue até a URL do seu painel do ArgoCD (geralmente https://argocd.example.com ou http://localhost:8080 se estiver usando port-forward).
@@ -364,23 +402,23 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.pas
 - Adicione novo repositório no menu lateral esquerdo, clique em Settings (Configurações).
 
 - Em Repositories, clique em + New Repo e preencha os detalhes do seu repositório hello-manifests:
-![alt text](image-1.png)
-![alt text](image-2.png)
+![alt text](images/image-21.png)
+![alt text](images/image-22.png)
   - Repository URL: https://github.com/seu-usuario-github/hello-manifests.git (substitua seu-usuario-github).
 
   - Name: hello-manifests (ou um nome de sua preferência).
 
-  - Authentication: Se o repositório for público, não precisa de credenciais. Se for privado, você pode usar um token de acesso pessoal do GitHub ou SSH. Para SSH, use a mesma chave privada que você configurou no GitHub Actions (mas certifique-se de que ela não tem passphrase).
+  - Authentication: Se o repositório for público, não precisa de credenciais. Se for privado, você pode usar um token de acesso pessoal do GitHub ou SSH. Para SSH, use a mesma chave privada que você configurou no GitHub Actions (mas certifique-se de que ela não tem passphrase). Caso tenha problemas posteriores, use a seu usuário github e senha o [PAT](#12-variáveis-de-ambiente) 
 
 - Clique em CONNECT.
-![alt text](image-3.png)
+![alt text](images/image-3.png)
 - O ArgoCD agora tem acesso ao seu repositório de manifestos e pode monitorá-lo.
 
 ## 2.4 Criar o app no ArgoCD
 - Crie uma nova aplicação no menu lateral esquerdo, clique em Applications.
 
 - Clique no botão + NEW APP e preencha os detalhes da nova aplicação:
-![alt text](image-4.png)
+![alt text](images/image-4.png)
   - Application Name: hello-app
 
   - Project: default (ou o projeto que você preferir)
@@ -396,8 +434,8 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.pas
   - Cluster: in-cluster (se você estiver implantando no mesmo cluster onde o ArgoCD está rodando) ou selecione o cluster de destino.
 
   - Namespace: default (ou o namespace onde você quer implantar a aplicação).
-![alt text](image-5.png)
-![alt text](image-6.png)
+![alt text](images/image-5.png)
+![alt text](images/image-6.png)
 - Clique em CREATE.
 
 - O ArgoCD irá agora detectar os manifestos no seu repositório hello-manifests e iniciará o processo de sincronização, implantando o hello-app-deployment e o hello-app-service no seu cluster Kubernetes. Você poderá ver o status da aplicação na interface do ArgoCD.
@@ -424,7 +462,7 @@ kubectl port-forward svc/hello-app-service 8080:80 -n default
 ```html
 {"message": "Hello World"}
 ``` 
-![alt text](image-7.png)
+![alt text](images/image-7.png)
 - Isso confirma que sua aplicação está rodando e acessível.
 
 ## 3.2 Alterando o repositório 
@@ -487,7 +525,7 @@ git push origin main
 Entregas Esperadas
 Para validar a implementação da pipeline de CI/CD, você precisará fornecer as seguintes evidências:
 
-![alt text](image-10.png)
+![alt text](images/image-10.png)
 
 ✅ Link do repositório Git com a aplicação FastAPI + Dockerfile + GitHub Actions:
 
@@ -500,9 +538,9 @@ Forneça o link para o seu repositório hello-manifests no GitHub. Este reposit�
 ✅ Evidência de build e push da imagem no Docker Hub:
 
 Uma captura de tela ou link direto para a página da sua imagem no Docker Hub, mostrando que a imagem seu-usuario-docker/hello-app (com as tags latest e a tag do SHA do commit) foi publicada com sucesso.
-
+![alt text](images/image-16.png)
 Alternativamente, uma captura de tela do log do GitHub Actions mostrando o passo de "Build and push Docker image" concluído com sucesso.
-
+![alt text](images/image-17.png)
 ✅ Evidência de atualização automática dos manifests com a nova tag da imagem:
 
 Uma captura de tela do histórico de commits do seu repositório hello-manifests no GitHub, mostrando um commit automático feito pelo GitHub Actions que atualizou a tag da imagem no deployment.yaml.
@@ -512,13 +550,14 @@ Ou, uma captura de tela do log do GitHub Actions mostrando o passo de "Update Ar
 ✅ Captura de tela do ArgoCD com a aplicação sincronizada:
 
 Uma captura de tela da interface do ArgoCD mostrando o status da sua aplicação hello-app como Synced (Sincronizado) e Healthy (Saudável), indicando que a implantação foi bem-sucedida.
-
+![alt text](images/image-18.png)
 ✅ Print do kubectl get pods com a aplicação rodando:
-
+![alt text](images/image-20.png)
 Uma captura de tela do seu terminal executando o comando kubectl get pods -n <seu-namespace> (ex: kubectl get pods -n default) e mostrando o pod da sua aplicação hello-app-deployment em estado Running.
-![alt text](image-8.png)
+![alt text](images/image-8.png)
 ✅ Print da resposta da aplicação via curl ou navegador:
-![alt text](image-9.png)
+![alt text](images/image-9.png)
 Uma captura de tela do seu navegador acessando http://localhost:8000/ (após executar o kubectl port-forward) e exibindo a mensagem de resposta da sua aplicação FastAPI (ex: {"message": "Olá do CI/CD com ArgoCD!"}).
-
+![alt text](images/image-11.png)
 Alternativamente, uma captura de tela do seu terminal executando curl http://localhost:8080/ e mostrando a mesma mensagem de resposta.
+![alt text](images/image-12.png)
