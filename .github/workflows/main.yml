@@ -1,4 +1,4 @@
-name: CI/CD Pipeline - Build, Push & Update ArgoCD Manifests
+name: CI/CD Pipeline - Build, Push & Update ArgoCD Manifests (Two Repositories)
 
 on:
   push:
@@ -6,24 +6,39 @@ on:
       - main
 
 env:
-  DOCKER_IMAGE_NAME: fassir/hello-app
+  DOCKER_IMAGE_NAME: fassir/hello-app 
   IMAGE_TAG: ${{ github.sha }}
 
   MANIFESTS_REPO_OWNER: fassir
   MANIFESTS_REPO_NAME: hello-manifests
-  MANIFESTS_PATH_IN_REPO: hello-app
+  MANIFESTS_PATH_IN_REPO: hello-app 
+  
+  LOCAL_MANIFESTS_CLONE_PATH: manifests-repo-clone 
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write
-      pull-requests: write
+      contents: write      
+      pull-requests: write 
 
     steps:
-      - name: Checkout application code
+      - name: Checkout application code (hello-app)
         uses: actions/checkout@v4
+
+      
+      - name: Generate SSH Key for Deploy Key (TEMPORARY STEP - REMOVE AFTER USE)
+        run: |
+          ssh-keygen -t rsa -b 4096 -N "" -f deploy_key
+          echo "--- COPIE A CHAVE PRIVADA ABAIXO (INCLUINDO CABEÇALHO/RODAPÉ) ---"
+          cat github_actions_manifests_cicd_2025
+          echo "--- CHAVE PRIVADA ACIMA ---"
+          echo "--- COPIE A CHAVE PÚBLICA ABAIXO ---"
+          cat github_actions_manifests_cicd_2025.pub
+          echo "--- CHAVE PÚBLICA ACIMA ---"
+        shell: bash
+      # --- FIM DA ETAPA TEMPORÁRIA ---
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -42,31 +57,36 @@ jobs:
           tags: |
             ${{ env.DOCKER_IMAGE_NAME }}:${{ env.IMAGE_TAG }}
             ${{ env.DOCKER_IMAGE_NAME }}:latest
-      - name: Checkout ArgoCD manifests repository
+
+      - name: Checkout ArgoCD manifests repository (hello-manifests)
         uses: actions/checkout@v4
         with:
           repository: ${{ env.MANIFESTS_REPO_OWNER }}/${{ env.MANIFESTS_REPO_NAME }}
-          path: ${{ env.MANIFESTS_REPO_NAME }}
-          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+          path: ${{ env.LOCAL_MANIFESTS_CLONE_PATH }} 
+          ssh-key: ${{ secrets.SSH_PRIVATE_KEY }} 
+          token: ${{ secrets.GH_PAT_FOR_MANIFESTS }} 
 
       - name: Update Kubernetes manifests
         run: |
-          cd ${{ env.MANIFESTS_REPO_NAME }}/${{ env.MANIFESTS_PATH_IN_REPO }}
+          cd ${{ env.LOCAL_MANIFESTS_CLONE_PATH }}/${{ env.MANIFESTS_PATH_IN_REPO }}
+          
           sed -i "s|image: ${{ env.DOCKER_IMAGE_NAME }}:.*|image: ${{ env.DOCKER_IMAGE_NAME }}:${{ env.IMAGE_TAG }}|" deployment.yaml
           
-          cat deployment.yaml
+          echo "Conteúdo de deployment.yaml atualizado:"
+          cat deployment.yaml 
         working-directory: ${{ github.workspace }}
 
       - name: Create Pull Request for manifest changes
         uses: peter-evans/create-pull-request@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_PAT_FOR_MANIFESTS }} 
           commit-message: "chore(app): Update hello-app image to ${{ env.IMAGE_TAG }}"
-          branch: update-image-${{ github.sha }}
+          branch: update-image-${{ github.sha }} 
           delete-branch: true
           title: "Update hello-app image to ${{ env.IMAGE_TAG }}"
           body: |
             Atualiza a imagem do `hello-app` no manifesto do Kubernetes para a tag `${{ env.IMAGE_TAG }}`.
             Gerado automaticamente pelo workflow de CI/CD.
-          base: main
+          base: main 
           repository: ${{ env.MANIFESTS_REPO_OWNER }}/${{ env.MANIFESTS_REPO_NAME }}
+          path: ${{ env.LOCAL_MANIFESTS_CLONE_PATH }}
