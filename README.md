@@ -487,6 +487,8 @@ git push origin main
 Entregas Esperadas
 Para validar a implementação da pipeline de CI/CD, você precisará fornecer as seguintes evidências:
 
+![alt text](image-10.png)
+
 ✅ Link do repositório Git com a aplicação FastAPI + Dockerfile + GitHub Actions:
 
 Forneça o link para o seu repositório hello-app no GitHub. Este repositório deve conter o main.py, Dockerfile, requirements.txt e a pasta .github/workflows com o arquivo main.yml do GitHub Actions.
