@@ -4,7 +4,7 @@ on:
     branches:
       - main 
 env:
-  DOCKER_IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/hello-app
+  DOCKER_IMAGE_NAME: fassir/hello-app
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
