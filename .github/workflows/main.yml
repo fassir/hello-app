@@ -6,9 +6,8 @@ on:
       - main
 
 env:
-  DOCKER_IMAGE_NAME: fassir/hello-app
+  DOCKER_IMAGE_NAME: fassir/hello-app 
   IMAGE_TAG: ${{ github.sha }}
-  MANIFESTS_DIR: hello-app
 
 jobs:
   build-and-pr:
@@ -44,8 +43,9 @@ jobs:
 
       - name: Update Kubernetes manifests
         run: |
-          # --- MUDANÇA AQUI: Navega para a subpasta ANTES de rodar o sed ---
-          cd ${{ env.MANIFESTS_DIR }}
+          # --- AQUI ESTÁ A MUDANÇA CRÍTICA: REMOVIDO O 'cd SUBPASTA' ---
+          # O deployment.yaml está na raiz do seu repositório hello-app, 
+          # então o sed pode ser executado diretamente.
           sed -i "s|image: ${{ env.DOCKER_IMAGE_NAME }}:.*|image: ${{ env.DOCKER_IMAGE_NAME }}:${{ env.IMAGE_TAG }}|" deployment.yaml
           
           echo "Conteúdo de deployment.yaml atualizado:"
