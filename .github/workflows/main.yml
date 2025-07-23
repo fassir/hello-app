@@ -3,64 +3,63 @@ name: CI/CD Pipeline - Build, Push & Update ArgoCD Manifests
 on:
   push:
     branches:
-      - main # 
+      - main
 
 env:
   DOCKER_IMAGE_NAME: fassir/hello-app
-  IMAGE_TAG: ${{ github.sha }}        
-  MANIFESTS_REPO_OWNER: fassir         
+  IMAGE_TAG: ${{ github.sha }}
+
+  MANIFESTS_REPO_OWNER: fassir
   MANIFESTS_REPO_NAME: hello-manifests
+  MANIFESTS_PATH_IN_REPO: hello-app
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest 
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
       - name: Checkout application code
-        uses: actions/checkout@v4 
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3 
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3 
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5 
+        uses: docker/build-push-action@v5
         with:
-          context: . 
-          push: true 
+          context: .
+          push: true
           tags: |
-            ${{ env.DOCKER_IMAGE_NAME }}:${{ env.IMAGE_TAG }} # Tag com o SHA do commit
-            ${{ env.DOCKER_IMAGE_NAME }}:latest               # Tag 'latest' também
+            ${{ env.DOCKER_IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ${{ env.DOCKER_IMAGE_NAME }}:latest
 
       - name: Checkout ArgoCD manifests repository
-        uses: actions/checkout@v4 
+        uses: actions/checkout@v4
         with:
           repository: ${{ env.MANIFESTS_REPO_OWNER }}/${{ env.MANIFESTS_REPO_NAME }}
           path: ${{ env.MANIFESTS_REPO_NAME }}
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
       - name: Update Kubernetes manifests
         run: |
-          # Navega para o diretório clonado do 'hello-manifests' e entra na pasta 'k8s'
-          # Certifique-se de que a pasta 'k8s' existe dentro do seu 'hello-manifests'
-          cd ${{ env.MANIFESTS_REPO_NAME }}/k8s
-          
-          # Usa 'sed' para substituir a tag da imagem no deployment.yaml
-          # Ele procura por 'image: fassir/hello-app:*' e substitui pela nova tag
-          # Ajuste o 'fassir/hello-app' se seu DOCKER_IMAGE_NAME for diferente
+          cd ${{ env.MANIFESTS_REPO_NAME }}/${{ env.MANIFESTS_PATH_IN_REPO }}
           sed -i "s|image: ${{ env.DOCKER_IMAGE_NAME }}:.*|image: ${{ env.DOCKER_IMAGE_NAME }}:${{ env.IMAGE_TAG }}|" deployment.yaml
           
-          # Opcional: Imprime o conteúdo do deployment.yaml nos logs para depuração
-          echo "Updated deployment.yaml content:"
           cat deployment.yaml
-        working-directory: ${{ github.workspace }} 
+        working-directory: ${{ github.workspace }}
 
       - name: Create Pull Request for manifest changes
-        uses: peter-evans/create-pull-request@v5 
+        uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "chore(app): Update hello-app image to ${{ env.IMAGE_TAG }}"
