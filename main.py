@@ -6,4 +6,4 @@ app = FastAPI()
 @app.get("/")
 async def root():
     # Mensagem inicial da aplicação
-    return {"message": "Hello World"}
+    return {"message": "Olá do CI/CD com ArgoCD!"}

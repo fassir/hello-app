@@ -156,6 +156,23 @@ Estas são as variáveis necessarias para criação do workflow dentro do github
         ![image](images/image-2.png)
         * Cole o **conteúdo completo** do arquivo `~/.ssh/github_actions_rsa` (começa com `-----BEGIN OPENSSH PRIVATE KEY-----` e termina com `-----END OPENSSH PRIVATE KEY-----`). Certifique-se de copiar tudo, incluindo as linhas de `BEGIN` e `END`.
 
+    * **Chave pública para repositório hello-app**
+        
+      * Adicionar a chave pública ao repositório hello-manifests:
+        
+      * Vá para hello-manifests > Settings > Deploy keys.
+        
+        ![image](images/image.png)
+        ![image](images/image-1.png)
+      * Clique em Add deploy key.
+        ![image](images/image-2.png)
+        
+        **Title**: github-actions-for-hello-app (ou um nome descritivo)
+        
+        **Key**: Cole o conteúdo do arquivo público: cat ~/.ssh/github_actions_manifests_rsa_key.pub
+        
+      * Marque a opção "Allow write access". Isso é crucial para que o GitHub Actions possa fazer commits/PRs nesse repositório.
+
 ## 1.3 Executando ações diretório do projeto
 - Para criar o repositório, usamos os seguintes comando:
 ```bash
@@ -298,7 +315,44 @@ git push origin main
 - Este repositório agora está pronto para ser monitorado pelo ArgoCD.
 
 ## 2.2 – Criar o App no ArgoCD
-- Esta etapa assume que você já tem o ArgoCD instalado e funcionando em seu cluster Kubernetes. Se não tiver, siga a documentação oficial do ArgoCD para instalação.
+- É uma boa prática isolar o ArgoCD em seu próprio namespace.
+
+```Bash
+kubectl create namespace argocd
+```
+
+- Aplique os manifestos de instalação do ArgoCD diretamente no seu cluster.
+
+```Bash
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
+
+- Aguarde alguns minutos para que os pods do ArgoCD sejam iniciados. Você pode monitorar o progresso:
+
+```Bash
+kubectl get pods -n argocd
+```
+- Você deve ver vários pods, como argocd-server, argocd-repo-server, argocd-application-controller, etc., todos com status Running. Para interagir com o ArgoCD, você precisará acessar sua interface web. O serviço argocd-server é um ClusterIP por padrão, o que significa que ele não é acessível externamente sem um port-forward ou um Ingress.
+
+- Usando Port-Forward, encaminhando o tráfego da porta 8080 da sua máquina local para a porta 443 do serviço argocd-server dentro do cluster.
+```Bash
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+```
+
+- Abrir seu navegador e vá para https://localhost:8080. Você pode receber um aviso de certificado inválido, pois é um certificado autoassinado. Você pode prosseguir com segurança.
+![alt text](image.png)
+- Fazer Login no ArgoCD CLI. A primeira vez que você acessa a interface web, ou se quiser usar a CLI do ArgoCD, precisará de uma senha. A senha inicial para o usuário admin é o nome do pod argocd-server.
+
+- Obtenha o nome do pod argocd-server:
+
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+```
+- Copie a saída deste comando (será algo como argocd-server-xxxxxxxxxx-yyyyy). Esta é a sua senha inicial.
+
+* Username: admin
+
+* Password: Cole o nome do pod argocd-server que você obteve no passo anterior.
 
 - A criação do aplicativo no ArgoCD pode ser feita via interface web (UI) ou via argocd CLI. Vamos descrever os passos para a UI, que é mais visual.
 
@@ -310,7 +364,8 @@ git push origin main
 - Adicione novo repositório no menu lateral esquerdo, clique em Settings (Configurações).
 
 - Em Repositories, clique em + New Repo e preencha os detalhes do seu repositório hello-manifests:
-
+![alt text](image-1.png)
+![alt text](image-2.png)
   - Repository URL: https://github.com/seu-usuario-github/hello-manifests.git (substitua seu-usuario-github).
 
   - Name: hello-manifests (ou um nome de sua preferência).
@@ -318,14 +373,14 @@ git push origin main
   - Authentication: Se o repositório for público, não precisa de credenciais. Se for privado, você pode usar um token de acesso pessoal do GitHub ou SSH. Para SSH, use a mesma chave privada que você configurou no GitHub Actions (mas certifique-se de que ela não tem passphrase).
 
 - Clique em CONNECT.
-
+![alt text](image-3.png)
 - O ArgoCD agora tem acesso ao seu repositório de manifestos e pode monitorá-lo.
 
 ## 2.4 Criar o app no ArgoCD
 - Crie uma nova aplicação no menu lateral esquerdo, clique em Applications.
 
 - Clique no botão + NEW APP e preencha os detalhes da nova aplicação:
-
+![alt text](image-4.png)
   - Application Name: hello-app
 
   - Project: default (ou o projeto que você preferir)
@@ -341,7 +396,8 @@ git push origin main
   - Cluster: in-cluster (se você estiver implantando no mesmo cluster onde o ArgoCD está rodando) ou selecione o cluster de destino.
 
   - Namespace: default (ou o namespace onde você quer implantar a aplicação).
-
+![alt text](image-5.png)
+![alt text](image-6.png)
 - Clique em CREATE.
 
 - O ArgoCD irá agora detectar os manifestos no seu repositório hello-manifests e iniciará o processo de sincronização, implantando o hello-app-deployment e o hello-app-service no seu cluster Kubernetes. Você poderá ver o status da aplicação na interface do ArgoCD.
@@ -368,7 +424,7 @@ kubectl port-forward svc/hello-app-service 8080:80 -n default
 ```html
 {"message": "Hello World"}
 ``` 
-
+![alt text](image-7.png)
 - Isso confirma que sua aplicação está rodando e acessível.
 
 ## 3.2 Alterando o repositório 
@@ -458,9 +514,9 @@ Uma captura de tela da interface do ArgoCD mostrando o status da sua aplicação
 ✅ Print do kubectl get pods com a aplicação rodando:
 
 Uma captura de tela do seu terminal executando o comando kubectl get pods -n <seu-namespace> (ex: kubectl get pods -n default) e mostrando o pod da sua aplicação hello-app-deployment em estado Running.
-
+![alt text](image-8.png)
 ✅ Print da resposta da aplicação via curl ou navegador:
-
-Uma captura de tela do seu navegador acessando http://localhost:8080/ (após executar o kubectl port-forward) e exibindo a mensagem de resposta da sua aplicação FastAPI (ex: {"message": "Olá do CI/CD com ArgoCD!"}).
+![alt text](image-9.png)
+Uma captura de tela do seu navegador acessando http://localhost:8000/ (após executar o kubectl port-forward) e exibindo a mensagem de resposta da sua aplicação FastAPI (ex: {"message": "Olá do CI/CD com ArgoCD!"}).
 
 Alternativamente, uma captura de tela do seu terminal executando curl http://localhost:8080/ e mostrando a mesma mensagem de resposta.
