@@ -36,6 +36,6 @@ jobs:
       - name: Checkout ArgoCD manifests repository
         uses: actions/checkout@v4
         with:
-          repository: ${{github.actor}}/hello-manifests 
+          repository: fassir/hello-manifests 
           path: hello-manifests 
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
