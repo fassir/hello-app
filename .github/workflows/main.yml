@@ -4,7 +4,7 @@ on:
     branches:
       - main 
 env:
-  DOCKER_IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/hello-app
+  DOCKER_IMAGE_NAME: fassir/hello-app
   IMAGE_TAG: ${{ github.sha }}
 
 jobs:
@@ -36,6 +36,6 @@ jobs:
       - name: Checkout ArgoCD manifests repository
         uses: actions/checkout@v4
         with:
-          repository: ${{github.actor}}/hello-manifests 
+          repository: fassir/hello-manifests 
           path: hello-manifests 
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }}
