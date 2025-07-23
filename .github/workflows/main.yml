@@ -9,7 +9,7 @@ on:
 env:
   DOCKER_IMAGE_NAME: ${{ secrets.DOCKER_USERNAME }}/hello-app
   IMAGE_TAG: ${{ github.sha }}
-  MANIFESTS_REPO: seu-usuario-github/hello-manifests
+  MANIFESTS_REPO: fassir/hello-manifests
   MANIFESTS_PATH: k8s
 
 jobs:
