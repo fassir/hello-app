@@ -475,7 +475,7 @@ git push origin main
 
   - Mantenha o kubectl port-forward rodando (se ele parou, execute novamente).
 
-  - Atualize a página no seu navegador (http://localhost:8080/).
+  - Atualize a página no seu navegador (http://localhost:8000/).
 
   - Você deverá ver a nova mensagem:
 ```html
