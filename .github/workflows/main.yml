@@ -9,11 +9,13 @@ env:
   DOCKER_IMAGE_NAME: fassir/hello-app
   IMAGE_TAG: ${{ github.sha }}
 
-  # --- INFORMAÇÕES DO REPOSITÓRIO DE MANIFESTOS ---
   MANIFESTS_REPO_OWNER: fassir
   MANIFESTS_REPO_NAME: hello-manifests
   # O caminho DENTRO do repositório hello-manifests onde estão os .yaml
   MANIFESTS_PATH_IN_REPO: hello-app 
+  
+  # --- NOVO: Caminho local onde o repositório de manifestos será clonado ---
+  LOCAL_MANIFESTS_CLONE_PATH: manifests-repo-clone 
 
 jobs:
   build-and-push:
@@ -49,13 +51,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.MANIFESTS_REPO_OWNER }}/${{ env.MANIFESTS_REPO_NAME }}
-          path: ${{ env.MANIFESTS_REPO_NAME }} # Clona o hello-manifests para uma pasta com o mesmo nome
+          # Clona o hello-manifests para o caminho definido em LOCAL_MANIFESTS_CLONE_PATH
+          path: ${{ env.LOCAL_MANIFESTS_CLONE_PATH }} 
           ssh-key: ${{ secrets.SSH_PRIVATE_KEY }} # Usa SSH para autenticar (precisa da Deploy Key)
 
       - name: Update Kubernetes manifests
         run: |
           # Navega para a pasta CORRETA dentro do repositório de manifestos clonado
-          cd ${{ env.MANIFESTS_REPO_NAME }}/${{ env.MANIFESTS_PATH_IN_REPO }}
+          cd ${{ env.LOCAL_MANIFESTS_CLONE_PATH }}/${{ env.MANIFESTS_PATH_IN_REPO }}
           
           # Atualiza a tag da imagem no deployment.yaml
           sed -i "s|image: ${{ env.DOCKER_IMAGE_NAME }}:.*|image: ${{ env.DOCKER_IMAGE_NAME }}:${{ env.IMAGE_TAG }}|" deployment.yaml
@@ -75,4 +78,7 @@ jobs:
           body: |
             Atualiza a imagem do `hello-app` no manifesto do Kubernetes para a tag `${{ env.IMAGE_TAG }}`.
             Gerado automaticamente pelo workflow de CI/CD.
-          base: main
+          base: main # A branch base para o Pull Request (a branch 'main' do hello-manifests)
+          repository: ${{ env.MANIFESTS_REPO_OWNER }}/${{ env.MANIFESTS_REPO_NAME }}
+          # --- NOVO: Onde a ação deve procurar as mudanças para o PR ---
+          path: ${{ env.LOCAL_MANIFESTS_CLONE_PATH }}
