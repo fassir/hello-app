@@ -68,4 +68,7 @@ jobs:
           delete-branch: true
           title: "Update hello-app image to ${{ env.IMAGE_TAG }}"
           body: |
-            Atualiza a imagem do `hello-app` no manifesto do Kubernetes para a tag `${{ env
+            Atualiza a imagem do `hello-app` no manifesto do Kubernetes para a tag `${{ env.IMAGE_TAG }}`.
+            Gerado automaticamente pelo workflow de CI/CD.
+          base: main
+          repository: ${{ env.MANIFESTS_REPO_OWNER }}/${{ env.MANIFESTS_REPO_NAME }}
