@@ -1,4 +1,4 @@
-name: CI/CD Pipeline - Build, Push & Update ArgoCD Manifests (Two Repos)
+name: CI/CD Pipeline - Build, Push & Update ArgoCD Manifests (Two Repositories)
 
 on:
   push:
@@ -13,7 +13,7 @@ env:
   MANIFESTS_REPO_OWNER: fassir
   MANIFESTS_REPO_NAME: hello-manifests
   # O caminho DENTRO do repositório hello-manifests onde estão os .yaml
-  MANIFESTS_PATH_IN_REPO: hello-app # <-- AGORA CORRETO COM BASE NO SEU 'pwd'
+  MANIFESTS_PATH_IN_REPO: hello-app 
 
 jobs:
   build-and-push:
@@ -75,6 +75,4 @@ jobs:
           body: |
             Atualiza a imagem do `hello-app` no manifesto do Kubernetes para a tag `${{ env.IMAGE_TAG }}`.
             Gerado automaticamente pelo workflow de CI/CD.
-          base: main # A branch base para o Pull Request (a branch 'main' do hello-manifests)
-          # O repositório onde o Pull Request será criado (o hello-manifests)
-          repository: ${{ env.MANIFESTS_REPO_OWNER }}/${{ env.MANIFESTS_REPO_NAME }}
+          base: main
